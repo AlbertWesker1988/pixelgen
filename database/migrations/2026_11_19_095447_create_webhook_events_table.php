@@ -1,0 +1,32 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('webhook_events', function (Blueprint $table) {
+            $table->id();
+
+            // Pixelforge's event id (evt_...). UNIQUE = the idempotency guarantee:
+            // a duplicate delivery fails this insert, so we never process it twice.
+            $table->string('event_id')->unique();
+
+            $table->string('type'); // generation.processing | .succeeded | .failed | ping
+            $table->string('pixelforge_generation_id')->nullable(); // gen_... from the payload
+            $table->unsignedInteger('delivery_attempt')->nullable();
+            $table->json('payload')->nullable(); // raw event, kept for audit/debugging
+
+            $table->timestamp('processed_at')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('webhook_events');
+    }
+};
