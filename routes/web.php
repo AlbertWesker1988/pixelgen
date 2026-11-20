@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\AdminReportController;
+use App\Http\Controllers\CreditController;
 use App\Http\Controllers\GenerationController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WebhookController;
@@ -21,6 +23,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/generate', [GenerationController::class, 'create'])->name('generations.create');
     Route::post('/generations', [GenerationController::class, 'store'])->name('generations.store');
     Route::get('/generations', [GenerationController::class, 'index'])->name('generations.index');
+
+    Route::get('/credits', [CreditController::class, 'index'])->name('credits.index');
+    Route::post('/credits', [CreditController::class, 'store'])->name('credits.store');
+
+    // Operator-only spend/profit report.
+    Route::get('/admin/report', AdminReportController::class)
+        ->middleware('can:access-admin')
+        ->name('admin.report');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

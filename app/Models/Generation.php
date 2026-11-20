@@ -3,12 +3,20 @@
 namespace App\Models;
 
 use App\Enums\GenerationStatus;
+use App\Observers\GenerationObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
 /**
  * @property string|null $pixelforge_id
  * @property GenerationStatus $status
-**/
+ * @property string|null $estimated_user_cost
+ * @property string|null $user_cost
+ * @property string|null $provider_cost
+ **/
+#[ObservedBy(GenerationObserver::class)]
 class Generation extends Model
 {
     protected $fillable = [
@@ -51,6 +59,14 @@ class Generation extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * @return HasMany<CreditTransaction, $this>
+     */
+    public function creditTransactions(): HasMany
+    {
+        return $this->hasMany(CreditTransaction::class);
     }
 
     /**

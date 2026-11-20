@@ -6,11 +6,15 @@ use App\Enums\GenerationStatus;
 use App\Http\Requests\StoreGenerationRequest;
 use App\Jobs\CreateGenerationJob;
 use App\Models\Generation;
+use App\Models\User;
+use App\Services\Credits\CreditLedger;
 use App\Services\Pixelforge\CostCalculator;
 use App\Services\Pixelforge\PixelforgeClient;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -20,11 +24,12 @@ class GenerationController extends Controller
      * The generate form. We hand the page Pixelforge's pricing (rates + token
      * model) and our markup so it can preview the cost as the user types.
      */
-    public function create(PixelforgeClient $client): Response
+    public function create(PixelforgeClient $client, CreditLedger $ledger): Response
     {
         return Inertia::render('Generations/Create', [
             'pricing' => $this->pricing($client),
             'markup' => (string) config('services.pixelforge.markup'),
+            'balance' => $ledger->balanceFor(auth()->user()),
         ]);
     }
 
@@ -32,8 +37,13 @@ class GenerationController extends Controller
      * Record the generation locally, then hand the actual API call to a queued
      * job. The estimate stored here is computed server-side, so it is the
      * authoritative "what we showed the user" number.
+     *
+     * The affordability check and the credit hold run in one locked transaction:
+     * we lock the user row, re-read the balance, and only then create the
+     * generation and reserve the estimate. Two concurrent generations therefore
+     * serialise, so a user can never overspend by firing requests in parallel.
      */
-    public function store(StoreGenerationRequest $request, PixelforgeClient $client, CostCalculator $calc): RedirectResponse
+    public function store(StoreGenerationRequest $request, PixelforgeClient $client, CostCalculator $calc, CreditLedger $ledger): RedirectResponse
     {
         $data = $request->validated();
         $rates = $this->pricing($client)['rates'];
@@ -41,16 +51,30 @@ class GenerationController extends Controller
 
         $estimate = $calc->estimate($rates, $data['prompt'], $data['size'], $data['quality'], $referenceImages);
 
-        $generation = $request->user()->generations()->create([
-            'idempotency_key' => (string) Str::uuid(),
-            'status' => GenerationStatus::Creating,
-            'prompt' => $data['prompt'],
-            'size' => $data['size'],
-            'quality' => $data['quality'],
-            'reference_images' => $referenceImages,
-            'rates' => $rates,
-            'estimated_user_cost' => $estimate['user'],
-        ]);
+        $generation = DB::transaction(function () use ($request, $data, $rates, $referenceImages, $estimate, $ledger): Generation {
+            $user = User::query()->whereKey($request->user()->getKey())->lockForUpdate()->firstOrFail();
+
+            if (! $ledger->canAfford($user, $estimate['user'])) {
+                throw ValidationException::withMessages([
+                    'credits' => "Not enough credits. This generation needs \${$estimate['user']} and your balance is \${$ledger->balanceFor($user)}. Buy more credits and try again.",
+                ]);
+            }
+
+            $generation = $user->generations()->create([
+                'idempotency_key' => (string) Str::uuid(),
+                'status' => GenerationStatus::Creating,
+                'prompt' => $data['prompt'],
+                'size' => $data['size'],
+                'quality' => $data['quality'],
+                'reference_images' => $referenceImages,
+                'rates' => $rates,
+                'estimated_user_cost' => $estimate['user'],
+            ]);
+
+            $ledger->hold($user, $generation, $estimate['user']);
+
+            return $generation;
+        });
 
         CreateGenerationJob::dispatch($generation);
 

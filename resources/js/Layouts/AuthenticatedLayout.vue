@@ -45,10 +45,32 @@ const showingNavigationDropdown = ref(false);
                                 >
                                     History
                                 </NavLink>
+                                <NavLink
+                                    :href="route('credits.index')"
+                                    :active="route().current('credits.index')"
+                                >
+                                    Credits
+                                </NavLink>
+                                <NavLink
+                                    v-if="$page.props.auth.user.is_admin"
+                                    :href="route('admin.report')"
+                                    :active="route().current('admin.report')"
+                                >
+                                    Admin
+                                </NavLink>
                             </div>
                         </div>
 
                         <div class="hidden sm:ms-6 sm:flex sm:items-center">
+                            <!-- Credit balance -->
+                            <Link
+                                :href="route('credits.index')"
+                                class="me-3 inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+                                title="Credit balance"
+                            >
+                                ${{ $page.props.balance ?? '0' }}
+                            </Link>
+
                             <!-- Settings Dropdown -->
                             <div class="relative ms-3">
                                 <Dropdown align="right" width="48">
@@ -157,6 +179,19 @@ const showingNavigationDropdown = ref(false);
                             :active="route().current('generations.index')"
                         >
                             History
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            :href="route('credits.index')"
+                            :active="route().current('credits.index')"
+                        >
+                            Credits (${{ $page.props.balance ?? '0' }})
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            v-if="$page.props.auth.user.is_admin"
+                            :href="route('admin.report')"
+                            :active="route().current('admin.report')"
+                        >
+                            Admin
                         </ResponsiveNavLink>
                     </div>
 

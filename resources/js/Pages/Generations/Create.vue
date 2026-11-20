@@ -10,6 +10,7 @@ import { computed } from 'vue';
 const props = defineProps({
     pricing: { type: Object, required: true },
     markup: { type: String, required: true },
+    balance: { type: String, required: true },
 });
 
 const SIZES = ['1024x1024', '1536x1024', '1024x1536'];
@@ -59,6 +60,9 @@ const estimatedCost = computed(() => {
 });
 
 const formattedEstimate = computed(() => `$${estimatedCost.value.toFixed(6)}`);
+
+/** Client-side hint only; the server re-checks and is the real gate. */
+const canAfford = computed(() => parseFloat(props.balance) >= estimatedCost.value);
 
 function submit() {
     form.transform((data) => ({
@@ -160,17 +164,29 @@ function submit() {
                         <InputError class="mt-1" :message="form.errors.reference_images" />
                     </div>
 
+                    <InputError :message="form.errors.credits" />
+
                     <div class="flex items-center justify-between border-t border-gray-100 pt-4">
                         <div>
                             <p class="text-sm text-gray-500">Estimated cost</p>
                             <p class="text-lg font-semibold text-gray-900">{{ formattedEstimate }}</p>
                             <p class="text-xs text-gray-400">Upper bound. You are never charged more than this.</p>
+                            <p class="mt-1 text-xs" :class="canAfford ? 'text-gray-400' : 'text-red-600'">
+                                Balance ${{ balance }}.
+                                <Link
+                                    v-if="!canAfford"
+                                    :href="route('credits.index')"
+                                    class="font-semibold underline"
+                                >
+                                    Buy credits
+                                </Link>
+                            </p>
                         </div>
                         <div class="flex items-center gap-4">
                             <Link :href="route('generations.index')" class="text-sm text-gray-600 hover:text-gray-900">
                                 History
                             </Link>
-                            <PrimaryButton :disabled="form.processing">Generate</PrimaryButton>
+                            <PrimaryButton :disabled="form.processing || !canAfford">Generate</PrimaryButton>
                         </div>
                     </div>
                 </form>

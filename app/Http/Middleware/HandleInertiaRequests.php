@@ -2,11 +2,14 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Credits\CreditLedger;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
 {
+    public function __construct(private readonly CreditLedger $ledger) {}
+
     /**
      * The root template that is loaded on the first page visit.
      *
@@ -29,11 +32,15 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $user = $request->user();
+
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $request->user(),
+                'user' => $user,
             ],
+            // Credit balance for the nav pill; null when signed out.
+            'balance' => $user ? $this->ledger->balanceFor($user) : null,
         ];
     }
 }
